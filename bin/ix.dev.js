@@ -1214,7 +1214,7 @@
                             mode: modes[it[1]]
                         };
                     });
-                    x0$.rule(/([-0-9]+)/i, function(it) {
+                    x0$.rule(/((?:-[0-9]+|[0-9]+))/i, function(it) {
                         return {
                             type: "number",
                             value: parseInt(it[1], 10)
