@@ -4,6 +4,8 @@
 
 Open `ix.html` in your browser (tested with modern Chromes and Firefoxes) and off you go.
 
+Online version here: --> http://akx.github.io/ix/ix.html <--
+
 ## Building
 
     npm install -g gulp
