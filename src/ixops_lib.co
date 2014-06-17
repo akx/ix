@@ -1,0 +1,142 @@
+{register} = require "./ixops"
+{wrap} = require "./ixutil"
+ixblend = require './ixblend'
+ixbit = require './ixbit'
+ixcolor = require './ixcolor'
+
+const M_PI_2 = 6.28318530718
+
+
+# ========== Core functions
+
+register "break", !(core) -> core.ip = core.next = -1
+register "halt", !(core) -> core.vars.halt = true
+
+# ========== Stack manipulation
+
+register "dup", !(core, arg) ->
+	if arg then
+		val = core.peek()
+		for x from 1 til (0 | arg)
+			core.push val
+	else
+		core.push core.peek()
+
+register "clear", !(core) -> core.clear()
+
+register "blend", !(core, arg) -> core.blend = ixblend[arg] || null
+
+register "swap", !(core) ->
+	a = core.pop()
+	b = core.pop()
+	core.push a
+	core.push b
+
+register "swizzle", !(core, arg) ->
+	return unless arg
+	q = []
+	for ch of arg =>
+		q.push 0 | core.stack[core.stack.length - 1 - (0 | ch)]
+	soff = core.stack.length - 1
+	for v, i of q => core.stack[soff - i] = v
+
+
+# ========== Simple maffs
+
+register "randf", !(core) -> core.push Math.random()
+register "rand8", !(core) -> core.push 0 | (Math.random() * 256)
+register "rand16", !(core) -> core.push 0 | (Math.random() * 65536)
+register "abs", !(core) -> core.push Math.abs(core.pop())
+register "round", !(core) -> core.push 0 | Math.round(core.pop())
+
+
+register_wrapped = !(name, func, mul) ->
+	register "#{name}", !(core, , narg) ->
+		val = func(mul * core.pop())
+		if narg then val *= parseFloat(narg)
+		core.push val
+
+	register "abs#{name}", !(core, , narg) ->
+		val = Math.abs(func(mul * core.pop()))
+		if narg then val *= parseFloat(narg)
+		core.push val
+
+register_wrapped "sin", Math.sin, M_PI_2
+register_wrapped "cos", Math.cos, M_PI_2
+register_wrapped "tan", Math.tan, M_PI_2
+register_wrapped "sqrt", Math.sqrt, 1
+register_wrapped "pow2", (-> it * it), 1
+register_wrapped "pow3", (-> it * it * it), 1
+
+
+# ========== Bit packing
+
+packimpl = !(core, spec, value, assignToVars) ->
+	with new ixbit(0 | value)
+		for i from 0 til spec.length by 2
+			name = spec[i]
+			size = 0 | spec[i + 1]
+			if assignToVars then
+				core.vars[name] = &readMsb(size, 8)
+			else
+				&writeMsb((0 | core.vars[name]), size, 8)
+
+		return &number
+
+register "pack", !(core, arg) -> 
+	arg = "r5g6b5" if not arg
+	value = packimpl(core, arg, 0, false)
+	core.push value
+
+register "unpack", !(core, arg) ->
+	arg = "b5g6r5" if not arg
+	packimpl(core, arg, core.pop(), true)
+
+# ========== Color transform
+
+register "fromhsv", !(core) ->
+	hue = core.pop()
+	sat = core.pop()
+	val = core.pop()
+	core.vars{r,g,b} = ixcolor.hsv2rgb(hue, sat, val)
+
+register "loadvsh", !(core) ->
+	with core.vars
+		with ixcolor.rgb2hsv(&r, &g, &b)
+			core.push &v
+			core.push &s
+			core.push &h
+
+
+# ========== Buffer sampling
+
+copyLineCore = !(sourceY, source, destY, dest, width, roff=0, woff=0) ->
+	bytes = width * 4
+	srcOffset = bytes * sourceY
+	destOffset = bytes * destY
+	for i from 0 til bytes => dest.data[destOffset + i + woff] = source.data[srcOffset + i + roff]
+
+register "copyline", !(core) ->
+	sourceY = core.pop()
+	destY = core.pop()
+	copyLineCore(sourceY, core.source, destY, core.dest, core.vars.w, core.vars.roff, core.vars.woff)
+
+sample = (core, x, y) ->
+	v = core.vars
+	d = core.source.data
+	x = wrap(x, v.w)
+	y = wrap(y, v.h)
+	srcOffset = 0 | (v.w * 4 * y) + 4 * (0 | x)
+	v.r = d[srcOffset]
+	v.g = d[srcOffset + 1]
+	v.b = d[srcOffset + 2]
+
+
+register "samplex", !(core) ->
+	sample(core.vars.x - core.pop(), core.vars.y)
+ 
+register "sampley", !(core) ->
+	sample(core.vars.x, core.vars.y - core.pop())
+
+register "samplexy", !(core) ->
+	sample(core.vars.x - core.pop(), core.vars.y - core.pop())	

@@ -1,0 +1,4 @@
+
+export wrap = (val, max) ->
+	while val < 0 then val += max
+	return val % max

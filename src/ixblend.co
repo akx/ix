@@ -1,0 +1,22 @@
+blenders = {
+      none: (base, adj) -> base
+      normal: (base, adj) -> adj
+      add: (base, adj) -> base + adj
+      invert: (base, adj) -> (255 - (0 | adj) & 0xFF)
+      darken: (base, adj) -> Math.min(base, adj)
+      multiply: (base, adj) -> ((base * adj) / 255)
+      colorburn: (base, adj) -> if adj <= 0 then 0 else Math.max(255 - ((255 - base) * 255 / adj), 0)
+      linearburn: (base, adj) -> Math.max(0, (base + adj - 255))
+      lighten: (base, adj) -> Math.max(base, adj)
+      screen: (base, adj) -> (255 - (((255 - base) * (255 - adj)) / 255))
+      colordodge: (base, adj) -> if adj >= 255 then 255 else Math.min(base * 255 / (255 - adj), 255)
+      lineardodge: (base, adj) -> Math.min((base + adj), 255)
+      overlay: (base, adj) -> if (base < 128) then ((2 * base * adj) / 255) else (255 - (2 * (255 - base) * (255 - adj) / 255))
+      softlight: (base, adj) -> if (base < 128) then (((adj>>1) + 64) * base * (2 / 255)) else (255 - (191 - (adj>>1)) * (255 - base) * (2 / 255))
+      hardlight: (base, adj) -> if adj < 128 then (2 * base * adj) / 255 else 255 - ((2 * (255 - base) * (255 - adj)) / 255)
+      difference: (base, adj) -> Math.abs(base - adj)
+      exclusion: (base, adj) -> 255 - (((255 - base) * (255 - adj) / 255) + (base * adj / 255))
+      subtract: (base, adj) -> Math.max((base - adj), 0)
+}
+
+module.exports = blenders

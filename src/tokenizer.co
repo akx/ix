@@ -1,0 +1,35 @@
+class Tokenizer
+	->
+		@rules = []
+
+	rule: !(regexp, callback) ->
+		if not regexp.exec then throw new Error("pass regexps to rule")
+		if callback and not callback.call then
+			if typeof callback is "string" then
+				type = callback; callback = (m) -> {type, value: m.1 || m.0}
+			else
+				type = callback; callback = (m) -> {} <<< type <<< {value: m.1 || m.0}
+		@rules.push {regexp, callback}
+		return this
+
+	scan: !(text) ->
+		tokens = []
+		rest = text
+		rules = @rules
+		state = {}
+
+		next = !->
+			for rules =>
+				if (match = &regexp.exec rest)?index == 0 then
+					rest := rest.substr match.0.length
+					if &callback then tokens.push that.call(state, match)
+					return true
+			return false
+
+		while rest.length
+			break if not next! 
+
+		return {tokens, rest}
+
+
+module.exports = Tokenizer

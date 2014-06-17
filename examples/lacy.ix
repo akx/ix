@@ -1,0 +1,3 @@
+xwrap=1 ywrap=1
+
+<x <y 3* ^ >dy

@@ -1,0 +1,5 @@
+$copy
+rwrap=1
+blend:multiply
+<y 310/ round >+roff
+<y 51/ 3% >+woff

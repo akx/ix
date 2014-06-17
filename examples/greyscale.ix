@@ -1,0 +1,8 @@
+# load the lightness of the current pixel onto the stack
+<light
+
+# multiply by 255
+255*
+
+# save it into all the color registers
+>r,g,b

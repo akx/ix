@@ -1,0 +1,83 @@
+# based on code from Chroma-js, http://driven-by-data.net/about/chromajs/
+
+export rgb2hsl_l = !(r, g, b) -> return (Math.max(r, g, b) + Math.min(r, g, b)) / 2 / 255
+export rgb2hsv_v = !(r, g, b) -> return Math.max(r, g, b) / 255.0
+
+export rgb2hsv_s = !(r, g, b) ->
+    min = Math.min(r, g, b) / 255
+    max = Math.max(r, g, b) / 255
+    delta = max - min
+    return delta / max
+
+export rgb2hsl = (r, g, b) ->
+    r /= 255
+    g /= 255
+    b /= 255
+
+    min = Math.min(r, g, b)
+    max = Math.max(r, g, b)
+
+    l = (max + min) / 2
+
+    if max == min
+        s = 0
+        h = Number.NaN
+    else
+        s = (if l < 0.5 then (max - min) / (max + min) else (max - min) / (2 - max - min))
+
+    if r == max then h = (g - b) / (max - min)
+    else if (g == max) then h = 2 + (b - r) / (max - min)
+    else if (b == max) then h = 4 + (r - g) / (max - min)
+
+    h /= 6
+    if h < 0 then h += 1
+    return {h, s, l}
+
+export rgb2hsv = (r, g, b) ->
+    min = Math.min(r, g, b)
+    max = Math.max(r, g, b)
+    delta = max - min
+    v = max / 255.0
+    if max == 0
+        h = 0
+        s = 0
+    else
+        s = delta / max
+        if r is max then h = (g - b) / delta
+        if g is max then h = 2 + (b - r) / delta
+        if b is max then h = 4 + (r - g) / delta
+        h /= 6
+        if h < 0 then h += 1
+    return {h, s, v}
+
+luminance_x = (x) ->
+    x /= 255
+    if x <= 0.03928 then return x / 12.92
+    return Math.pow((x+0.055) / 1.055, 2.4)
+
+export luminance = (r, g, b) ->
+    # relative luminance
+    # see http://www.w3.org/TR/2008/REC-WCAG20-20081211/#relativeluminancedef
+    return 0.2126 * luminance_x(r) + 0.7152 * luminance_x(g) + 0.0722 * luminance_x(b)
+
+
+export hsv2rgb = !(h, s, v) ->
+    v *= 255
+    if s <= 0
+        return {r: v, g: v, b: v}
+
+    h *= 6
+    while h < 0 => h += 6
+    while h > 6 => h -= 6
+    i = Math.floor h
+    f = h - i
+    p = v * (1 - s)
+    q = v * (1 - s * f)
+    t = v * (1 - s * (1 - f))
+    switch i
+        case 0 => return {r: v, g: t, b: p}
+        case 1 => return {r: q, g: v, b: p}
+        case 2 => return {r: p, g: v, b: t}
+        case 3 => return {r: p, g: q, b: v}
+        case 4 => return {r: t, g: p, b: v}
+        default => return {r: v, g: p, b: q}

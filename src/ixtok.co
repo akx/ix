@@ -1,0 +1,193 @@
+Tokenizer = require "./tokenizer"
+ixops = require "./ixops"
+
+escapeRegexp = -> it.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')
+
+ops = {
+	"+": "add",
+	"-": "sub",
+	"*": "mul",
+	"/": "div",
+	"%": "mod",
+	"&": "and",
+	"|": "or",
+	"^": "xor",
+	"<-<": "rol",
+	">->": "ror",
+	"<<": "shl",
+	">>": "shr",
+}
+
+modes = {
+	"8T": "trunc8",
+	"8W": "wrap8",
+	"16T": "trunc16"
+	"16W": "wrap16"
+}
+
+
+
+opsRegexpBit = "(" + (for k in ops => escapeRegexp(k)).join("|") + ")"
+modesRegexpBit = "(" + (for k in modes => escapeRegexp(k)).join("|") + ")"
+
+ident = ->
+	ident = ixops.match(it.1)
+	if not ident then throw new Error("unknown identifier: #{it.1}")
+	return {type: \ident, value: ident, var: it.2, num: (if it.2 then parseFloat(it.2) else null)}
+
+makeTokenizer = ->
+	t = new Tokenizer
+		&rule /\s+/
+		&rule /#.+?\n/
+		&rule /\$([a-z]+)(?:=([a-z0-9]+))?/, -> {type: \option, name: it.1, value: it.2 || true}
+		#&rule /:([a-z0-9]+)/, "label"
+		&rule /0?x([-0-9a-f]+)/i, -> {type: \number, value: parseInt(it.1, 16)}
+		&rule /0?b([-01]+)/i, -> {type: \number, value: parseInt(it.1, 2)}
+		&rule new RegExp("#{modesRegexpBit}([-0-9]+)(\.)?#{opsRegexpBit}"), -> {type: \arith, op: ops[it.4], invert: it.3 == '.', const: parseInt(it.2), mode: modes[it.1]}
+		&rule /([-0-9]+)/i, -> {type: \number, value: parseInt(it.1,10)}
+		&rule /<([a-z,]+)/i, !->
+			type = "load"
+			value = it.1
+			if value.indexOf(",") > -1 then
+				value = (for value.split(',') => if &length then &)
+				type = "mload"			
+			return {type, value}
+		&rule new RegExp(">(\.?)#{opsRegexpBit}([a-z,]+)"), !->
+			value = it.3
+			type = "augsave"
+			if value.indexOf(",") > -1 then
+				value = (for value.split(',') => if &length then &)
+				type = "maugsave"
+			return {type, value, invert: (it.1 == '.'), op: (ops[it.2])}
+		
+		&rule />([a-z,]+)/i, !->
+			value = it.1
+			type = "save"
+			if value.indexOf(",") > -1 then
+				value = (for value.split(',') => if &length then &)
+				type = "msave"
+			return {type, value}
+
+		&rule /([a-z]+)=([-0-9]+)/i, -> {type: \save, const: parseInt(it.2), value: it.1}
+		&rule /\?([a-z]+)\s*([<>=!&^|%])\s*([-0-9]+)/, -> {type: \test, test: it.2, var1: it.1, const: parseInt(it.3)}
+		&rule /\?([<>=!&^|%])\s*([-0-9]+)/, -> {type: \test, test: it.1, const: parseInt(it.2)}
+		&rule /\?([a-z]+)\s*([<>=!&^|%])\s*([a-z]+)/i, -> {type: \test, test: it.2, var1: it.1, var2: it.3}
+		&rule /\?([<>=!&^|%])\s*([a-z]+)/i, -> {type: \test, test: it.1, var: it.2}
+		&rule /(else|\\)/i, -> {type: \else, value: (if @braceStack then @braceStack[@braceStack.length - 1] || null else null)}
+		&rule /\{/, ->
+			@braceId = (0 | @braceId) + 1
+			this@@braceStack.push (v = "" + @braceId)
+			return {type: \start, value: v}
+		&rule /\}/, -> {type: \end, value: @braceStack.pop!}
+		&rule /([a-z][a-z0-9]*):\((.+?)\)/i, ident
+		&rule /([a-z][a-z0-9]*)(?::(\S+))?/i, ident
+		&rule new RegExp("#{modesRegexpBit}(\.?)#{opsRegexpBit}"), -> {type: \arith, op: ops[it.3], invert: it.2 == '.', mode: modes[it.1]}
+		&rule new RegExp("(\.?)#{opsRegexpBit}"), -> {type: \arith, op: ops[it.2], invert: it.1 == '.'}
+	
+	return t
+
+processJumps = (tokens) ->
+	aat = (index, attr = "type") -> tokens[index]?[attr]
+	for tok, idx of tokens
+		if tok.type == "test"
+			tok.jt = -1
+			tok.jf = -1
+			continue if idx == tokens.length - 1
+			if aat(idx + 1) == "start"
+				braceId = aat(idx + 1, "value")
+				endIndex = null
+				elseIndex = null
+				for eidx from idx til tokens.length
+					ttok = tokens[eidx]
+					if ttok.type == "else" and ttok.value == braceId then elseIndex = eidx
+					if ttok.type == "end" and ttok.value == braceId then endIndex = eidx; break
+				if endIndex == null
+					throw new Error("no end brace found")
+				tok.jt = idx + 2
+				if elseIndex
+					tok.jf = elseIndex + 1
+					tokens[elseIndex].j = endIndex + 1
+				else
+					tok.jf = endIndex + 1
+			else
+				tok.jt = idx + 1
+				if aat(idx + 2) == "else"
+					tok.jf = idx + 3
+					tokens[idx + 2].j = idx + 4
+				else
+					tok.jf = idx + 2
+
+class CompiledCode
+	(@tokens, @rest, @options) ->
+
+	dump: !->
+		out = []
+		out.push "#{@tokens.length} insns."
+		options = Object.keys(@options).sort!
+		if options.length then out.push "options: #{options.join ', '}"
+
+		st = 0
+		for t, i of @tokens
+			st-- if t.type == "end"
+			st = 0 if st < 0
+			idt = "--" * st + (if st then " " else "")
+			r = "[#{i}] #{idt}#{t.type} "
+			r += "v=#{t.value} " if t.value
+			r += "m=#{t.mode} " if t.mode
+			r += "c=#{t.const} " if t.const
+			r += "op1=#{t.op||t.op1} " if t.op or t.op1
+			r += "op2=#{t.op2} " if t.op2
+			r += "var1=#{t.var||t.var1} " if t.var1 or t.var
+			r += "var2=#{t.var2} " if t.var2
+			r += "(invert)" if t.invert
+			r += "jt=#{t.jt} " if t.jt
+			r += "jf=#{t.jf} " if t.jf
+			r += "j=#{t.j} " if t.j
+			out.push r
+			st++ if t.type == "start"
+
+		if @rest?length then out.push "(unparsed:) #{@rest}"
+
+		return out
+
+optimize = (tokensIn) ->
+	tokensOut = []
+	idx = 0
+	while idx < tokensIn.length
+		ct = tokensIn[idx]
+		nt = tokensIn[idx + 1]
+		pt = tokensIn[idx - 1]
+		# peephole optimize "30 *" to "30*"
+		if ct and nt and ct.type == "number" and nt.type == "arith" and not nt.const
+			tokensOut.push ({} <<< nt <<< {const: ct.value})
+			idx += 2
+			continue
+		# hoist absolute jumps from ends and elses into the instruction before
+		if ct and pt then
+			if (ct.type == "else" or ct.type == "end") and ct.j and not (pt.j or pt.jt or pt.jf) then
+				pt.j = delete ct.j
+
+		tokensOut.push ct
+		idx ++
+
+
+	return tokensOut
+
+class Compiler
+	->
+		@tokenizer = makeTokenizer()
+
+	compile: (source) ->
+		{tokens, rest} = @tokenizer.scan source
+		options = {}
+		tokens = tokens.filter (token) -> 
+			if token.type == "option" then
+				options[token.name] = token.value
+				return false
+			return true
+		processJumps(tokens)
+		tokens = optimize(tokens)
+		return new CompiledCode(tokens, rest, options)
+
+module.exports.Compiler = Compiler
+module.exports.makeTokenizer = makeTokenizer

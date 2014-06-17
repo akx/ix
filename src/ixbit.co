@@ -1,0 +1,24 @@
+class Bit
+	(@number=0) ->
+
+	write: !(value, size) ->
+		mask = (1 << size) - 1
+		value &= mask
+		@number = (@number << size) | value
+
+	writeMsb: !(value, destSize, origSize) ->
+		value >>= (origSize - destSize)
+		@write(value, destSize)
+
+	read: !(size) ->
+		mask = (1 << size) - 1
+		value = @number & mask
+		@number >>= size
+		return value
+
+	readMsb: !(readSize, origSize) ->
+		cvalue = @read(readSize)
+		value = cvalue << (origSize - readSize)
+		return value
+
+module.exports = Bit

@@ -1,0 +1,23 @@
+ops = {}
+matchCache = {}
+export register = !(name, func) -> ops[name] = func
+
+undef = !(core, ident) -> console.log "unimplemented ident #{ident}"
+
+export match = !(ident) ->
+	func = null
+	if ops[ident] then return ident
+	if matchCache[ident] then return that
+	matches = []
+	re = new RegExp("^#{ident}.*", "i")
+	for name, func in ops
+		if re.exec name then
+			matches.push name
+			break if matches.length > 1
+	if matches.length == 1 then
+		return matchCache[ident] = matches.0
+	return matchCache[ident] = null
+
+export exec = !(core, ident, op) ->
+	func = ops[ident]
+	func(core, op.var, op.num)

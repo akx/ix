@@ -1,0 +1,6 @@
+$sourcemap
+xwrap=1
+ywrap=1
+
+<y 30/ sin <u * >+dx
+<x 30/ cos <i * >+dy

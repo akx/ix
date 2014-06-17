@@ -1,0 +1,132 @@
+ixtok = require "./ixtok"
+ixcore = require "./ixcore"
+lenna = require "./ixlenna"
+
+DEFAULT_OPTIONS = {
+	+autosave
+}
+
+class Ix
+	(options) ->
+		@options = {} <<< DEFAULT_OPTIONS <<< options
+		@options.autosave = @options.autosave || !!(window?localStorage)
+		@compiler = new ixtok.Compiler()
+		@core = new ixcore.Core()		
+		@canvas = (@options.canvas || document.createElement("canvas"))
+		@_initCodeEditor()
+		@_initImageElement()
+		@_initFileInput()
+
+	_initCodeEditor: !->
+		self = @
+		if @options.codeEditor
+			with that
+				if @options.autosave then &value = (window.localStorage.getItem(\ixcode) || &value)
+				&addEventListener "input", (!-> self.setCode(this.value)), false
+				&addEventListener "change", (!-> self.setCode(this.value)), false
+				&addEventListener "keypress", ((event) ->
+					if (event.keyCode == 10 or event.keyCode == 13) and event.ctrlKey then
+						self.process!
+				), false
+				self.setCode(&value)
+
+	_initImageElement: !->
+		self = @
+		if not @options.imageElement then
+			@options.imageElement = document.createElement("img")
+
+		if not @options.imageElement.src then
+			@options.imageElement.src = lenna
+
+		@options.imageElement.addEventListener "load", (!-> self.setImage(this)), false
+		if @options.imageElement.complete then @setImage @options.imageElement
+
+	_initFileInput: !->
+		self = @
+		if fi = @options.fileInput
+			fi.addEventListener "change", (!->
+				self.options.imageElement.src = URL.createObjectURL(fi.files[0])
+			)
+		if sr = @options.saveButton
+			sr.addEventListener "click", !-> self.saveImage()
+
+	setCode: !(code) ->
+		if @options.autosave then window.localStorage.setItem \ixcode, code
+		try
+			log = @core.setCode(@compiler.compile(code))
+			if @options.logDiv then that.textContent = log
+		catch exc
+			if @options.logDiv then that.textContent = "error: #{exc}"
+
+	_appendLog: !(text) ->
+		if @options.logDiv then that.textContent += "\n#{text}"
+
+	setImage: !(image) ->
+		return if not image?complete
+		{width, height} = image
+		document.createElement("canvas")
+			&width = width
+			&height = height
+			&getContext("2d")
+				&drawImage image, 0, 0
+				@imageData = &getImageData 0, 0, width, height
+		@canvas <<< @imageData{width, height}
+		@core.source = @imageData
+
+	saveImage: !->
+		link = document.createElement("a")
+			&href = @canvas.toDataURL()
+			&download = "ix-#{+new Date()}.png"
+		event = document.createEvent("MouseEvents")
+			&initMouseEvent("click", true, false, window, 0, 0, 0, 0, 0, false, false, false, false, 0, null)
+		link.dispatchEvent(event)
+
+	process: !->
+		core = @core
+		{width, height} = @canvas
+		ctx = @canvas.getContext("2d")
+		ctx.globalCompositeOperation = "copy"
+
+		with core.code.options
+			copy = !!&copy
+			recur = !!&recur
+
+		if copy or recur then
+			ctx.putImageData(@imageData, 0, 0)
+		else
+			ctx.fillStyle = "black"
+			ctx.fillRect(0, 0, width, height)
+
+		core.source = @imageData
+		core.dest = ctx.getImageData(0, 0, width, height)
+		core.source = core.dest if recur
+
+		vars = {}
+		for @options.variableInputs || [] => vars[&dataset.var || "?"] = 0 | &value
+		async = (window.requestAnimationFrame and !core.code.options.sync)
+		@options.codeEditor?readonly = true
+		appendLog = @~_appendLog
+		if async then
+			core.beginProcessAsync(10000, vars)
+			stepSize = (if (0 | core.code.options.stepsize) then that else core.vars.w * 5 * 5)
+			start = +new Date()
+			callback = ->
+				for x from 0 til stepSize
+					if core.step()
+						done = true
+						appendLog "finished in #{+new Date() - start} msec"
+						break
+				ctx.putImageData(core.dest, 0, 0)
+				unless done
+					if delay = (0 | core.code.options.delay) then
+						setTimeout callback, delay
+					else 
+						requestAnimationFrame callback 
+			callback()
+		else
+			duration = core.process(10000, vars)
+			appendLog "finished in #{duration} msec"
+		@options.codeEditor?readonly = false
+		ctx.putImageData(core.dest, 0, 0)
+
+module.exports = Ix

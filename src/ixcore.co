@@ -1,0 +1,208 @@
+ixops = require './ixops'
+require "./ixops_lib"
+{wrap} = require "./ixutil"
+ixcolor = require './ixcolor'
+ixblend = require './ixblend'
+
+
+const TIMER_STEP = 5000
+
+timer = 
+	if window?performance?now then -> window.performance.now()
+	else -> +new Date()
+
+arithop = (op, val1, val2, mode, invert) ->
+	if invert then [val2, val1] = [val1, val2]
+	retval = 0
+	switch op
+		case 'add' => retval = val1 + val2
+		case 'sub' => retval = val1 - val2
+		case 'mul' => retval = val1 * val2
+		case 'div' => retval = val1 / val2
+		case 'mod' => retval = val1 % val2
+		case 'and' => retval = val1 & val2
+		case 'or' => retval = val1 | val2
+		case 'xor' => retval = val1 ^ val2
+		case 'shl' => retval = val1 << val2
+		case 'shr' => retval = val1 >> val2
+		case 'rol' => retval = val1 <<< val2
+		case 'ror' => retval = val1 >>> val2
+		default => ...
+	# retval %= 256 if mode == "wrap8"
+	# retval &= 256 if mode == "trunc8"
+	# retval %= 65536 if mode == "wrap16"
+	# retval &= 65536 if mode == "trunc16"
+	return retval
+
+export class Core
+	->
+		@code = null
+		@source = null
+		@dest = null
+		@blend = null
+		@vars = {}
+
+	setCode: !(code) ->
+		@code = code
+		log = code.dump!.join("\n") 
+		return log
+
+	setSource: !(source) ->
+		@source = source
+
+	step: !->
+		Vars = @vars
+		if not (0 <= Vars.x < Vars.w and 0 <= Vars.y < Vars.h) or !!Vars.halt then return true
+		if (@stepCounter++) == TIMER_STEP
+			@stepCounter = 0
+			return true if timer() - @start >= @timeLimit
+		sd = @source.data
+		dd = @dest.data
+		w4 = Vars.w * 4
+		roffset = w4 * (0 | Vars.y) + 4 * (0 | Vars.x) + (0 | Vars.roff)
+		if Vars.rwrap then roffset = wrap(roffset, sd.length)
+		Vars.r = sd[roffset]
+		Vars.g = sd[roffset + 1]
+		Vars.b = sd[roffset + 2]
+		Vars.dx = Vars.x
+		Vars.dy = Vars.y
+		@execute(@timeLimit)
+		if Vars.xwrap then Vars.dx = wrap(Vars.dx, Vars.w)
+		if Vars.ywrap then Vars.dy = wrap(Vars.dy, Vars.h)
+		if @code.options.sourcemap then
+			woffset = roffset
+			roffset = w4 * (0 | Vars.dy) + 4 * (0 | Vars.dx) + (0 | Vars.woff)
+			Vars.r = sd[roffset]
+			Vars.g = sd[roffset + 1]
+			Vars.b = sd[roffset + 2]
+		else
+			woffset = w4 * (0 | Vars.dy) + 4 * (0 | Vars.dx) + (0 | Vars.woff)
+			if Vars.wwrap then woffset = wrap(woffset, dd.length)
+		if 0 <= woffset < dd.length - 3 then
+			{r, g, b} = Vars
+			if bl = @blend then
+				dd[woffset] = bl(dd[woffset], r)
+				dd[woffset + 1] = bl(dd[woffset + 1], g)
+				dd[woffset + 2] = bl(dd[woffset + 2], b)
+			else
+				dd[woffset] = r
+				dd[woffset + 1] = g
+				dd[woffset + 2] = b
+		Vars.x += 0 | Math.max(1, Vars.xd)
+		if Vars.x >= Vars.w or Vars.x < 0
+			Vars.x = 0
+			Vars.y += 0 | Math.max(1, Vars.yd)
+		Vars.step++
+
+	_initialize: (variables, timeLimit) ->
+		@vars = {
+			x: 0
+			y: 0
+			xd: 1
+			yd: 1
+			w: @source.width
+			h: @source.height
+			xwrap: 0
+			ywrap: 0
+			wwrap: 0
+			rwrap: 0
+			step: 0
+			roff: 0
+			woff: 0
+		} <<< (variables || {})
+		@start = timer()
+		@stepCounter = 0
+		@blend = null
+		@timeLimit = timeLimit		
+
+	process: !(timeLimit=2000, variables=null) ->
+		@_initialize(variables, timeLimit)
+		for ever => break if @step()
+		time = timer() - @start
+		console.log "finished in #{time}"
+		return time
+
+	beginProcessAsync: !(timeLimit=2000, variables=null) ->
+		@_initialize(variables, timeLimit)
+
+	execute: !(timeLimit=100) ->
+		start = timer()
+		@stack = []
+		@ip = 0
+		while 0 <= @ip < @code.tokens.length
+			tok = @code.tokens[@ip]
+			@next = tok.j || (@ip + 1)
+			switch tok.type
+				case 'load' => @push(@load(tok.value))
+				case 'mload' => for tok.value => @push(@load(&))
+				case 'save' => @save(tok.value, (if tok.const then that else @pop()))
+				case 'msave' =>
+					val = (if tok.const then that else @pop())
+					for tok.value => @save(&, val)
+				case 'augsave' =>
+					val1 = @load(tok.value)
+					val2 = @pop()
+					@save(tok.value, arithop(tok.op, val1, val2, null, tok.invert))
+				case 'maugsave' =>
+					val2 = @pop()
+					for tok.value =>
+						val1 = @load(&)
+						@save(&, arithop(tok.op, val1, val2, null, tok.invert))
+				case 'number' => @push(tok.value)
+				case 'arith'
+					val2 = (tok.const || @pop())
+					val1 = @pop()
+					@push arithop(tok.op, val1, val2, tok.mode, tok.invert)
+				case 'test'
+					val1 = if tok.var1 then @load(tok.var1) else @pop()
+					val2 = if tok.var2 then @load(that) else tok.const
+					retval = false
+					switch tok.test
+						case '=' => retval = (val1 == val2)
+						case '<' => retval = (val1 < val2)
+						case '>' => retval = (val1 > val2)
+						case '!' => retval = (val1 != val2)
+						case '&' => retval = !!(val1 & val2)
+						case '|' => retval = !!(val1 | val2)
+						case '^' => retval = !!(val1 ^ val2)
+						case '%' => retval = !!(val1 % val2)
+						default => ...
+					@next = if retval then tok.jt else tok.jf
+				case 'ident'
+					ixops.exec(@, tok.value, tok)
+				case 'start', 'else', 'end'
+					0 # unhandled -- @next handling takes care of the absolute jump
+				default
+					console.log @ip, tok
+					...
+			@ip = @next
+
+	pop: !-> return (@stack.pop() || 0)
+	peek: !-> return (@stack[0] || 0)
+	push: !(v) -> @stack.push(v)
+
+	load: !(n) ->
+		v = @vars
+		switch n
+			case "top" => return @peek()
+			case "luma" => return ixcolor.luminance(v.r, v.g, v.b)
+			case "hue" => return ixcolor.rgb2hsv(v.r, v.g, v.b).h
+			case "sat" => return ixcolor.rgb2hsv_s(v.r, v.g, v.b)
+			case "val" => return ixcolor.rgb2hsv_v(v.r, v.g, v.b)
+			case "light" => return ixcolor.rgb2hsl_l(v.r, v.g, v.b)
+			case "dst" =>
+				w2 = v.w / 2
+				h2 = v.h / 2
+				x = (v.x - w2) / w2
+				y = (v.y - h2) / h2
+				return Math.sqrt(x * x + y * y)
+			case "ang" =>
+				w2 = v.w / 2
+				h2 = v.h / 2
+				x = (v.x - w2) / w2
+				y = (v.y - h2) / h2
+				return Math.atan2(y, x) / 6.28318530718
+			default => return 0 | v[n]
+	save: !(n, v) -> @vars[n] = v
+	clear: ! -> @stack = []
+

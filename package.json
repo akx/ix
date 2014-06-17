@@ -1,0 +1,20 @@
+{
+  "name": "ix",
+  "version": "0.0.1",
+  "description": "",
+  "repository": {
+    "type": "git",
+    "url": "http://github.com/akx/ix.git"
+  },
+  "private": true,
+  "main": "gulpfile.js",
+  "author": "@akx",
+  "dependencies": {
+    "cocoify": "0.0.1",
+    "gulp": "^3.7.0",
+    "gulp-browserify": "^0.5.0",
+    "gulp-concat": "^2.2.0",
+    "gulp-uglifyjs": "^0.3.0",
+    "lodash": "^2.4.1"
+  }
+}
