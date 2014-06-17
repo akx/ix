@@ -1,0 +1,11 @@
+if(!window.ixExamples) window.ixExamples = {};
+window.ixExamples.example1 = "<y <x 14% 2/ + 256% dup >^g >|b"
+window.ixExamples.example2_interlace = "$copy\r\nxwrap=1\r\n<y 4% 50* 75- >+dx"
+window.ixExamples.greyscale = "# load the lightness of the current pixel onto the stack\r\n<light\r\n\r\n# multiply by 255\r\n255*\r\n\r\n# save it into all the color registers\r\n>r,g,b"
+window.ixExamples.lacy = "xwrap=1 ywrap=1\r\n\r\n<x <y 3* ^ >dy"
+window.ixExamples.munch = "<x <y ^ >dy"
+window.ixExamples.ripple = "$sourcemap\r\nxwrap=1\r\nywrap=1\r\n\r\n<y 30/ sin <u * >+dx\r\n<x 30/ cos <i * >+dy"
+window.ixExamples.sierpinski = "<x <y ^ >+dx"
+window.ixExamples.slats = "<x 100% <y <h / 1.- * >+dy"
+window.ixExamples.thatch = "<y 10% 9- >+dy\r\n<r dup ?<120 { /5 >+dy }\r\ncl <x <y ^ 19% ?<2 { <x 74% >+dx 34 d >+g >^r }"
+window.ixExamples.wrap = "$copy\r\nrwrap=1\r\nblend:multiply\r\n<y 310/ round >+roff\r\n<y 51/ 3% >+woff"
