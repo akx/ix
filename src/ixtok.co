@@ -44,7 +44,7 @@ makeTokenizer = ->
 		&rule /0?x([-0-9a-f]+)/i, -> {type: \number, value: parseInt(it.1, 16)}
 		&rule /0?b([-01]+)/i, -> {type: \number, value: parseInt(it.1, 2)}
 		&rule new RegExp("#{modesRegexpBit}([-0-9]+)(\.)?#{opsRegexpBit}"), -> {type: \arith, op: ops[it.4], invert: it.3 == '.', const: parseInt(it.2), mode: modes[it.1]}
-		&rule /([-0-9]+)/i, -> {type: \number, value: parseInt(it.1,10)}
+		&rule /((?:-[0-9]+|[0-9]+))/i, -> {type: \number, value: parseInt(it.1,10)}
 		&rule /<([a-z,]+)/i, !->
 			type = "load"
 			value = it.1
