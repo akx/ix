@@ -4,6 +4,10 @@
 
 Open `ix.html` in your browser (tested with modern Chromes and Firefoxes) and off you go.
 
+You can edit code in the text area on the right, then execute it by pressing ctrl+enter. Also try the presets if you like.
+
+Pay attention to the parser/compiler/runtime output below the code text area.
+
 Online version here: --> http://akx.github.io/ix/ix.html <--
 
 ## Building
