@@ -110,49 +110,51 @@ export class Core
 		while 0 <= @ip < @code.tokens.length
 			tok = @code.tokens[@ip]
 			@next = tok.j || (@ip + 1)
-			switch tok.type
-				case 'load' => @push(@load(tok.value))
-				case 'mload' => for tok.value => @push(@load(&))
-				case 'save' => @save(tok.value, (if tok.const then that else @pop()))
-				case 'msave' =>
-					val = (if tok.const then that else @pop())
-					for tok.value => @save(&, val)
-				case 'augsave' =>
-					val1 = @load(tok.value)
-					val2 = @pop()
-					@save(tok.value, arithop(tok.op, val1, val2, null, tok.invert))
-				case 'maugsave' =>
-					val2 = @pop()
-					for tok.value =>
-						val1 = @load(&)
-						@save(&, arithop(tok.op, val1, val2, null, tok.invert))
-				case 'number' => @push(tok.value)
-				case 'arith'
-					val2 = (tok.const || @pop())
-					val1 = @pop()
-					@push arithop(tok.op, val1, val2, tok.mode, tok.invert)
-				case 'test'
-					val1 = if tok.var1 then @load(tok.var1) else @pop()
-					val2 = if tok.var2 then @load(that) else tok.const
-					retval = false
-					switch tok.test
-						case '=' => retval = (val1 == val2)
-						case '<' => retval = (val1 < val2)
-						case '>' => retval = (val1 > val2)
-						case '!' => retval = (val1 != val2)
-						case '&' => retval = !!(val1 & val2)
-						case '|' => retval = !!(val1 | val2)
-						case '^' => retval = !!(val1 ^ val2)
-						case '%' => retval = !!(val1 % val2)
-						default => ...
-					@next = if retval then tok.jt else tok.jf
-				case 'ident'
-					ixops.exec(@, tok.value, tok)
-				case 'start', 'else', 'end'
-					0 # unhandled -- @next handling takes care of the absolute jump
-				default
-					console.log @ip, tok
-					...
+			rep = tok.rep || 1
+			while rep--
+				switch tok.type
+					case 'load' => @push(@load(tok.value))
+					case 'mload' => for tok.value => @push(@load(&))
+					case 'save' => @save(tok.value, (if tok.const then that else @pop()))
+					case 'msave' =>
+						val = (if tok.const then that else @pop())
+						for tok.value => @save(&, val)
+					case 'augsave' =>
+						val1 = @load(tok.value)
+						val2 = @pop()
+						@save(tok.value, arithop(tok.op, val1, val2, null, tok.invert))
+					case 'maugsave' =>
+						val2 = @pop()
+						for tok.value =>
+							val1 = @load(&)
+							@save(&, arithop(tok.op, val1, val2, null, tok.invert))
+					case 'number' => @push(tok.value)
+					case 'arith'
+						val2 = (tok.const || @pop())
+						val1 = @pop()
+						@push arithop(tok.op, val1, val2, tok.mode, tok.invert)
+					case 'test'
+						val1 = if tok.var1 then @load(tok.var1) else @pop()
+						val2 = if tok.var2 then @load(that) else tok.const
+						retval = false
+						switch tok.test
+							case '=' => retval = (val1 == val2)
+							case '<' => retval = (val1 < val2)
+							case '>' => retval = (val1 > val2)
+							case '!' => retval = (val1 != val2)
+							case '&' => retval = !!(val1 & val2)
+							case '|' => retval = !!(val1 | val2)
+							case '^' => retval = !!(val1 ^ val2)
+							case '%' => retval = !!(val1 % val2)
+							default => ...
+						@next = if retval then tok.jt else tok.jf
+					case 'ident'
+						ixops.exec(@, tok.value, tok)
+					case 'start', 'else', 'end'
+						0 # unhandled -- @next handling takes care of the absolute jump
+					default
+						console.log @ip, tok
+						...
 			@ip = @next
 
 	pop: !-> return (@stack.pop() || 0)

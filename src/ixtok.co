@@ -80,6 +80,7 @@ makeTokenizer = ->
 			this@@braceStack.push (v = "" + @braceId)
 			return {type: \start, value: v}
 		&rule /\}/, -> {type: \end, value: @braceStack.pop!}
+		&rule /\(x?([0-9]+)\)/, -> {type: \rep, value: 0 | it.1}
 		&rule /([a-z][a-z0-9]*):\((.+?)\)/i, ident
 		&rule /([a-z][a-z0-9]*)(?::(\S+))?/i, ident
 		&rule new RegExp("#{modesRegexpBit}(\.?)#{opsRegexpBit}"), -> {type: \arith, op: ops[it.3], invert: it.2 == '.', mode: modes[it.1]}
@@ -144,6 +145,7 @@ class CompiledCode
 			r += "jt=#{t.jt} " if t.jt
 			r += "jf=#{t.jf} " if t.jf
 			r += "j=#{t.j} " if t.j
+			r += "rep=#{t.rep} " if t.rep
 			out.push r
 			st++ if t.type == "start"
 
@@ -160,6 +162,13 @@ optimize = (tokensIn) ->
 		nt = tokensIn[idx + 1]
 		pt = tokensIn[idx - 1]
 
+		# process `rep` tokens
+		if ct and nt and nt.type == "rep" then
+			tokensOut.push({} <<< ct <<< {rep: (ct.rep || 0) + nt.value})
+			idx += 2
+			optimized = true
+			continue
+
 		# peephole optimize "30 *" to "30*"
 		if ct and nt and ct.type == "number" and nt.type == "arith" and not nt.const
 			tokensOut.push ({} <<< nt <<< {const: ct.value})
@@ -175,12 +184,6 @@ optimize = (tokensIn) ->
 			optimized = true
 			continue
 
-		# hoist absolute jumps from ends and elses into the instruction before
-		if ct and pt then
-			if (ct.type == "else" or ct.type == "end") and ct.j and not (pt.j or pt.jt or pt.jf) then
-				pt.j = delete ct.j
-				optimized = true
-
 		tokensOut.push ct
 		idx ++
 
@@ -188,6 +191,17 @@ optimize = (tokensIn) ->
 		tokensOut = optimize(tokensOut)
 
 	return tokensOut
+
+optimize2 = (tokens) ->
+	idx = 1
+	while idx < tokens.length
+		ct = tokens[idx]
+		pt = tokens[idx - 1]	
+		# hoist absolute jumps from ends and elses into the instruction before
+		if ct and pt then
+			if (ct.type == "else" or ct.type == "end") and ct.j and not (pt.j or pt.jt or pt.jf) then
+				pt.j = delete ct.j
+		idx++
 
 class Compiler
 	->
@@ -201,8 +215,9 @@ class Compiler
 				options[token.name] = token.value
 				return false
 			return true
-		processJumps(tokens)
 		tokens = optimize(tokens)
+		processJumps(tokens)
+		optimize2(tokens)
 		return new CompiledCode(tokens, rest, options)
 
 module.exports.Compiler = Compiler
