@@ -57,6 +57,7 @@ These variables have a special meaning in the ix language:
 
 These meta-variables can be read from, but not written to.
 
+* `num` -- the number of values on the stack
 * `top` -- the value on the top of the stack (peeked, not popped).
 * `luma` -- the relative luminance of the current RGB value, ranging from 0 to 1.
 * `hue` -- the HSV hue of the current RGB value, ranging from 0 to 1.

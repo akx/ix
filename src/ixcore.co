@@ -164,6 +164,7 @@ export class Core
 	load: !(n) ->
 		v = @vars
 		switch n
+			case "num" => return @stack.length
 			case "top" => return @peek()
 			case "luma" => return ixcolor.luminance(v.r, v.g, v.b)
 			case "hue" => return ixcolor.rgb2hsv(v.r, v.g, v.b).h
