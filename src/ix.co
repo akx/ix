@@ -103,9 +103,19 @@ class Ix
 
 		vars = {}
 		for @options.variableInputs || [] => vars[&dataset.var || "?"] = 0 | &value
+		
 		async = (window.requestAnimationFrame and !core.code.options.sync)
-		@options.codeEditor?readonly = true
+
+		editor = (@options.codeEditor)
+		editor?readonly = true
 		appendLog = @~_appendLog
+
+		finished = !(duration) ->
+			appendLog "finished in #{duration} msec"
+			appendLog "stack(#{core.stack.length}): #{core.stack.join(', ')}"
+			editor?readonly = false
+			ctx.putImageData(core.dest, 0, 0)
+
 		if async then
 			core.beginProcessAsync(10000, vars)
 			stepSize = (if (0 | core.code.options.stepsize) then that else core.vars.w * 5 * 5)
@@ -114,10 +124,11 @@ class Ix
 				for x from 0 til stepSize
 					if core.step()
 						done = true
-						appendLog "finished in #{+new Date() - start} msec"
 						break
 				ctx.putImageData(core.dest, 0, 0)
-				unless done
+				if done
+					finished(+new Date() - start)
+				else
 					if delay = (0 | core.code.options.delay) then
 						setTimeout callback, delay
 					else 
@@ -125,8 +136,9 @@ class Ix
 			callback()
 		else
 			duration = core.process(10000, vars)
-			appendLog "finished in #{duration} msec"
-		@options.codeEditor?readonly = false
-		ctx.putImageData(core.dest, 0, 0)
+			finished(duration)
+
+		
+		
 
 module.exports = Ix
