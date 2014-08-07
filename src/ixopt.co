@@ -1,0 +1,64 @@
+export optimize1 = (tokensIn) ->
+	tokensOut = []
+	optimized = false
+	idx = 0
+	while idx < tokensIn.length
+		ct = tokensIn[idx]
+		nt = tokensIn[idx + 1]
+		pt = tokensIn[idx - 1]
+
+		# process `rep` tokens
+		if ct and nt and nt.type == "rep" then
+			tokensOut.push({} <<< ct <<< {rep: (ct.rep || 0) + nt.value})
+			idx += 2
+			optimized = true
+			continue
+
+		# optimize two consecutive loads into one mload
+		if ct and nt and ct.type == "load" and nt.type == "load" and ((ct.rep || 1) == 1 and (nt.rep || 1) == 1) then
+			tokensOut.push ({} <<< ct <<< {type: "mload", value: [ct.value, nt.value]})
+			idx += 2
+			optimized = true
+			continue
+
+		# optimize a load or const followed by a dup into a load with rep
+		if ct and nt and (ct.type == "load" or ct.type == "mload" or ct.type == "number") and nt.type == "ident" and nt.value == "dup" and not nt.var then
+			tokensOut.push({} <<< ct <<< {rep: (ct.rep || 1) + 1})
+			idx += 2
+			optimized = true
+			continue
+
+
+		# peephole optimize "30 *" to "30*"
+		if ct and nt and ct.type == "number" and nt.type == "arith" and not nt.const
+			tokensOut.push ({} <<< nt <<< {const: ct.value})
+			idx += 2
+			optimized = true
+			continue
+
+		# peephole optimize "5 8+" to "13"
+		if ct and nt and ct.type == "number" and nt.type == "arith" and nt.const
+			val = arithop(nt.op, ct.value, nt.const, nt.mode, nt.invert)
+			tokensOut.push ({type: "number", value: val})
+			idx += 2
+			optimized = true
+			continue
+
+		tokensOut.push ct
+		idx ++
+
+	if optimized then  # Changes were made, go for another pass!
+		tokensOut = optimize1(tokensOut)
+
+	return tokensOut
+
+export optimize2 = (tokens) ->
+	idx = 1
+	while idx < tokens.length
+		ct = tokens[idx]
+		pt = tokens[idx - 1]	
+		# hoist absolute jumps from ends and elses into the instruction before
+		if ct and pt then
+			if (ct.type == "else" or ct.type == "end") and ct.j and not (pt.j or pt.jt or pt.jf) then
+				pt.j = delete ct.j
+		idx++

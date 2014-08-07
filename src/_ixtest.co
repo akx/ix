@@ -1,0 +1,5 @@
+ixtok = require "./ixtok"
+util = require "util"
+compiler = new ixtok.Compiler()
+code = "3 5+ 6/"
+console.log util.inspect compiler.compile(code)
