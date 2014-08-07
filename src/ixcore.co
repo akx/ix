@@ -3,7 +3,7 @@ require "./ixops_lib"
 {wrap} = require "./ixutil"
 ixcolor = require './ixcolor'
 ixblend = require './ixblend'
-
+{arithop} = require './ixarith'
 
 const TIMER_STEP = 5000
 
@@ -11,28 +11,6 @@ timer =
 	if window?performance?now then -> window.performance.now()
 	else -> +new Date()
 
-arithop = (op, val1, val2, mode, invert) ->
-	if invert then [val2, val1] = [val1, val2]
-	retval = 0
-	switch op
-		case 'add' => retval = val1 + val2
-		case 'sub' => retval = val1 - val2
-		case 'mul' => retval = val1 * val2
-		case 'div' => retval = val1 / val2
-		case 'mod' => retval = val1 % val2
-		case 'and' => retval = val1 & val2
-		case 'or' => retval = val1 | val2
-		case 'xor' => retval = val1 ^ val2
-		case 'shl' => retval = val1 << val2
-		case 'shr' => retval = val1 >> val2
-		case 'rol' => retval = val1 <<< val2
-		case 'ror' => retval = val1 >>> val2
-		default => ...
-	# retval %= 256 if mode == "wrap8"
-	# retval &= 256 if mode == "trunc8"
-	# retval %= 65536 if mode == "wrap16"
-	# retval &= 65536 if mode == "trunc16"
-	return retval
 
 export class Core
 	->

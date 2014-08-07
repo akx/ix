@@ -1,5 +1,6 @@
 Tokenizer = require "./tokenizer"
 ixops = require "./ixops"
+{arithop} = require "./ixarith"
 
 escapeRegexp = -> it.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')
 
@@ -132,9 +133,9 @@ class CompiledCode
 			st = 0 if st < 0
 			idt = "--" * st + (if st then " " else "")
 			r = "[#{i}] #{idt}#{t.type} "
-			r += "v=#{t.value} " if t.value
-			r += "m=#{t.mode} " if t.mode
-			r += "c=#{t.const} " if t.const
+			r += "v=#{t.value} " if t.value !== undefined
+			r += "m=#{t.mode} " if t.mode !== undefined
+			r += "const=#{t.const} " if t.const !== undefined
 			r += "op1=#{t.op||t.op1} " if t.op or t.op1
 			r += "op2=#{t.op2} " if t.op2
 			r += "var1=#{t.var||t.var1} " if t.var1 or t.var
@@ -152,24 +153,39 @@ class CompiledCode
 
 optimize = (tokensIn) ->
 	tokensOut = []
+	optimized = false
 	idx = 0
 	while idx < tokensIn.length
 		ct = tokensIn[idx]
 		nt = tokensIn[idx + 1]
 		pt = tokensIn[idx - 1]
+
 		# peephole optimize "30 *" to "30*"
 		if ct and nt and ct.type == "number" and nt.type == "arith" and not nt.const
 			tokensOut.push ({} <<< nt <<< {const: ct.value})
 			idx += 2
+			optimized = true
 			continue
+
+		# peephole optimize "5 8+" to "13"
+		if ct and nt and ct.type == "number" and nt.type == "arith" and nt.const
+			val = arithop(nt.op, ct.value, nt.const, nt.mode, nt.invert)
+			tokensOut.push ({type: "number", value: val})
+			idx += 2
+			optimized = true
+			continue
+
 		# hoist absolute jumps from ends and elses into the instruction before
 		if ct and pt then
 			if (ct.type == "else" or ct.type == "end") and ct.j and not (pt.j or pt.jt or pt.jf) then
 				pt.j = delete ct.j
+				optimized = true
 
 		tokensOut.push ct
 		idx ++
 
+	if optimized then  # Changes were made, go for another pass!
+		tokensOut = optimize(tokensOut)
 
 	return tokensOut
 
