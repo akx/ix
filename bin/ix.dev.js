@@ -153,7 +153,7 @@
                         link.dispatchEvent(event);
                     };
                     prototype.process = function() {
-                        var core, ref$, width, height, ctx, x0$, copy, recur, vars, i$, x1$, ref1$, len$, async, ref2$, appendLog, stepSize, that, start, callback, duration, ref3$;
+                        var core, ref$, width, height, ctx, x0$, copy, recur, vars, i$, x1$, ref1$, len$, async, editor, appendLog, finished, stepSize, that, start, callback, duration;
                         core = this.core;
                         ref$ = this.canvas, width = ref$.width, height = ref$.height;
                         ctx = this.canvas.getContext("2d");
@@ -178,10 +178,19 @@
                             vars[x1$.dataset["var"] || "?"] = 0 | x1$.value;
                         }
                         async = window.requestAnimationFrame && !core.code.options.sync;
-                        if ((ref2$ = this.options.codeEditor) != null) {
-                            ref2$.readonly = true;
+                        editor = this.options.codeEditor;
+                        if (editor != null) {
+                            editor.readonly = true;
                         }
                         appendLog = bind$(this, "_appendLog");
+                        finished = function(duration) {
+                            appendLog("finished in " + duration + " msec");
+                            appendLog("stack(" + core.stack.length + "): " + core.stack.join(", "));
+                            if (editor != null) {
+                                editor.readonly = false;
+                            }
+                            ctx.putImageData(core.dest, 0, 0);
+                        };
                         if (async) {
                             core.beginProcessAsync(1e4, vars);
                             stepSize = (that = 0 | core.code.options.stepsize) ? that : core.vars.w * 5 * 5;
@@ -191,12 +200,13 @@
                                 for (x = 0, to$ = stepSize; x < to$; ++x) {
                                     if (core.step()) {
                                         done = true;
-                                        appendLog("finished in " + (+new Date() - start) + " msec");
                                         break;
                                     }
                                 }
                                 ctx.putImageData(core.dest, 0, 0);
-                                if (!done) {
+                                if (done) {
+                                    return finished(+new Date() - start);
+                                } else {
                                     if (delay = 0 | core.code.options.delay) {
                                         return setTimeout(callback, delay);
                                     } else {
@@ -207,12 +217,8 @@
                             callback();
                         } else {
                             duration = core.process(1e4, vars);
-                            appendLog("finished in " + duration + " msec");
+                            finished(duration);
                         }
-                        if ((ref3$ = this.options.codeEditor) != null) {
-                            ref3$.readonly = false;
-                        }
-                        ctx.putImageData(core.dest, 0, 0);
                     };
                     return Ix;
                 }();
@@ -231,7 +237,7 @@
         }, {
             "./ixcore": 6,
             "./ixlenna": 7,
-            "./ixtok": 10
+            "./ixtok": 11
         } ],
         2: [ function(_dereq_, module, exports) {
             (function() {
@@ -715,7 +721,7 @@
                         this._initialize(variables, timeLimit);
                     };
                     prototype.execute = function(timeLimit) {
-                        var start, ref$, tok, i$, x0$, ref1$, len$, that, val, j$, x1$, ref2$, len1$, val1, val2, k$, x2$, ref3$, len2$, retval;
+                        var start, ref$, tok, rep, i$, x0$, ref1$, len$, that, val, j$, x1$, ref2$, len1$, val1, val2, k$, x2$, ref3$, len2$, retval;
                         timeLimit == null && (timeLimit = 100);
                         start = timer();
                         this.stack = [];
@@ -723,111 +729,114 @@
                         while (0 <= (ref$ = this.ip) && ref$ < this.code.tokens.length) {
                             tok = this.code.tokens[this.ip];
                             this.next = tok.j || this.ip + 1;
-                            switch (tok.type) {
-                              case "load":
-                                this.push(this.load(tok.value));
-                                break;
-
-                              case "mload":
-                                for (i$ = 0, len$ = (ref1$ = tok.value).length; i$ < len$; ++i$) {
-                                    x0$ = ref1$[i$];
-                                    this.push(this.load(x0$));
-                                }
-                                break;
-
-                              case "save":
-                                this.save(tok.value, (that = tok["const"]) ? that : this.pop());
-                                break;
-
-                              case "msave":
-                                val = (that = tok["const"]) ? that : this.pop();
-                                for (j$ = 0, len1$ = (ref2$ = tok.value).length; j$ < len1$; ++j$) {
-                                    x1$ = ref2$[j$];
-                                    this.save(x1$, val);
-                                }
-                                break;
-
-                              case "augsave":
-                                val1 = this.load(tok.value);
-                                val2 = this.pop();
-                                this.save(tok.value, arithop(tok.op, val1, val2, null, tok.invert));
-                                break;
-
-                              case "maugsave":
-                                val2 = this.pop();
-                                for (k$ = 0, len2$ = (ref3$ = tok.value).length; k$ < len2$; ++k$) {
-                                    x2$ = ref3$[k$];
-                                    val1 = this.load(x2$);
-                                    this.save(x2$, arithop(tok.op, val1, val2, null, tok.invert));
-                                }
-                                break;
-
-                              case "number":
-                                this.push(tok.value);
-                                break;
-
-                              case "arith":
-                                val2 = tok["const"] || this.pop();
-                                val1 = this.pop();
-                                this.push(arithop(tok.op, val1, val2, tok.mode, tok.invert));
-                                break;
-
-                              case "test":
-                                val1 = tok.var1 ? this.load(tok.var1) : this.pop();
-                                val2 = (that = tok.var2) ? this.load(that) : tok["const"];
-                                retval = false;
-                                switch (tok.test) {
-                                  case "=":
-                                    retval = val1 == val2;
+                            rep = tok.rep || 1;
+                            while (rep--) {
+                                switch (tok.type) {
+                                  case "load":
+                                    this.push(this.load(tok.value));
                                     break;
 
-                                  case "<":
-                                    retval = val1 < val2;
+                                  case "mload":
+                                    for (i$ = 0, len$ = (ref1$ = tok.value).length; i$ < len$; ++i$) {
+                                        x0$ = ref1$[i$];
+                                        this.push(this.load(x0$));
+                                    }
                                     break;
 
-                                  case ">":
-                                    retval = val1 > val2;
+                                  case "save":
+                                    this.save(tok.value, (that = tok["const"]) ? that : this.pop());
                                     break;
 
-                                  case "!":
-                                    retval = val1 != val2;
+                                  case "msave":
+                                    val = (that = tok["const"]) ? that : this.pop();
+                                    for (j$ = 0, len1$ = (ref2$ = tok.value).length; j$ < len1$; ++j$) {
+                                        x1$ = ref2$[j$];
+                                        this.save(x1$, val);
+                                    }
                                     break;
 
-                                  case "&":
-                                    retval = !!(val1 & val2);
+                                  case "augsave":
+                                    val1 = this.load(tok.value);
+                                    val2 = this.pop();
+                                    this.save(tok.value, arithop(tok.op, val1, val2, null, tok.invert));
                                     break;
 
-                                  case "|":
-                                    retval = !!(val1 | val2);
+                                  case "maugsave":
+                                    val2 = this.pop();
+                                    for (k$ = 0, len2$ = (ref3$ = tok.value).length; k$ < len2$; ++k$) {
+                                        x2$ = ref3$[k$];
+                                        val1 = this.load(x2$);
+                                        this.save(x2$, arithop(tok.op, val1, val2, null, tok.invert));
+                                    }
                                     break;
 
-                                  case "^":
-                                    retval = !!(val1 ^ val2);
+                                  case "number":
+                                    this.push(tok.value);
                                     break;
 
-                                  case "%":
-                                    retval = !!(val1 % val2);
+                                  case "arith":
+                                    val2 = tok["const"] || this.pop();
+                                    val1 = this.pop();
+                                    this.push(arithop(tok.op, val1, val2, tok.mode, tok.invert));
+                                    break;
+
+                                  case "test":
+                                    val1 = tok.var1 ? this.load(tok.var1) : this.pop();
+                                    val2 = (that = tok.var2) ? this.load(that) : tok["const"];
+                                    retval = false;
+                                    switch (tok.test) {
+                                      case "=":
+                                        retval = val1 == val2;
+                                        break;
+
+                                      case "<":
+                                        retval = val1 < val2;
+                                        break;
+
+                                      case ">":
+                                        retval = val1 > val2;
+                                        break;
+
+                                      case "!":
+                                        retval = val1 != val2;
+                                        break;
+
+                                      case "&":
+                                        retval = !!(val1 & val2);
+                                        break;
+
+                                      case "|":
+                                        retval = !!(val1 | val2);
+                                        break;
+
+                                      case "^":
+                                        retval = !!(val1 ^ val2);
+                                        break;
+
+                                      case "%":
+                                        retval = !!(val1 % val2);
+                                        break;
+
+                                      default:
+                                        throw Error("unimplemented");
+                                    }
+                                    this.next = retval ? tok.jt : tok.jf;
+                                    break;
+
+                                  case "ident":
+                                    ixops.exec(this, tok.value, tok);
+                                    break;
+
+                                  case "start":
+                                  case "else":
+                                  case "end":
+                                    0;
                                     break;
 
                                   default:
+                                    console.log(this.ip, tok);
                                     throw Error("unimplemented");
                                 }
-                                this.next = retval ? tok.jt : tok.jf;
-                                break;
-
-                              case "ident":
-                                ixops.exec(this, tok.value, tok);
-                                break;
-
-                              case "start":
-                              case "else":
-                              case "end":
-                                0;
-                                break;
-
-                              default:
-                                console.log(this.ip, tok);
-                                throw Error("unimplemented");
                             }
                             this.ip = this.next;
                         }
@@ -845,6 +854,9 @@
                         var v, w2, h2, x, y;
                         v = this.vars;
                         switch (n) {
+                          case "num":
+                            return this.stack.length;
+
                           case "top":
                             return this.peek();
 
@@ -901,7 +913,7 @@
             "./ixcolor": 5,
             "./ixops": 8,
             "./ixops_lib": 9,
-            "./ixutil": 11
+            "./ixutil": 12
         } ],
         7: [ function(_dereq_, module, exports) {
             (function() {
@@ -1136,14 +1148,92 @@
             "./ixblend": 4,
             "./ixcolor": 5,
             "./ixops": 8,
-            "./ixutil": 11
+            "./ixutil": 12
         } ],
         10: [ function(_dereq_, module, exports) {
             (function() {
-                var Tokenizer, ixops, arithop, escapeRegexp, ops, modes, opsRegexpBit, k, modesRegexpBit, ident, makeTokenizer, processJumps, CompiledCode, optimize, Compiler;
+                var optimize1, optimize2, out$ = typeof exports != "undefined" && exports || this;
+                out$.optimize1 = optimize1 = function(tokensIn) {
+                    var tokensOut, optimized, idx, ct, nt, pt, ref$, ref1$, ref2$, ref3$, val;
+                    tokensOut = [];
+                    optimized = false;
+                    idx = 0;
+                    while (idx < tokensIn.length) {
+                        ct = tokensIn[idx];
+                        nt = tokensIn[idx + 1];
+                        pt = tokensIn[idx - 1];
+                        if (ct && nt && nt.type == "rep") {
+                            tokensOut.push((ref$ = import$({}, ct), ref$.rep = (ct.rep || 0) + nt.value, ref$));
+                            idx += 2;
+                            optimized = true;
+                            continue;
+                        }
+                        if (ct && nt && ct.type == "load" && nt.type == "load" && ((ct.rep || 1) == 1 && (nt.rep || 1) == 1)) {
+                            tokensOut.push((ref1$ = import$({}, ct), ref1$.type = "mload", ref1$.value = [ ct.value, nt.value ], 
+                            ref1$));
+                            idx += 2;
+                            optimized = true;
+                            continue;
+                        }
+                        if (ct && nt && (ct.type == "load" || ct.type == "mload" || ct.type == "number") && nt.type == "ident" && nt.value == "dup" && !nt["var"]) {
+                            tokensOut.push((ref2$ = import$({}, ct), ref2$.rep = (ct.rep || 1) + 1, ref2$));
+                            idx += 2;
+                            optimized = true;
+                            continue;
+                        }
+                        if (ct && nt && ct.type == "number" && nt.type == "arith" && !nt["const"]) {
+                            tokensOut.push((ref3$ = import$({}, nt), ref3$["const"] = ct.value, ref3$));
+                            idx += 2;
+                            optimized = true;
+                            continue;
+                        }
+                        if (ct && nt && ct.type == "number" && nt.type == "arith" && nt["const"]) {
+                            val = arithop(nt.op, ct.value, nt["const"], nt.mode, nt.invert);
+                            tokensOut.push({
+                                type: "number",
+                                value: val
+                            });
+                            idx += 2;
+                            optimized = true;
+                            continue;
+                        }
+                        tokensOut.push(ct);
+                        idx++;
+                    }
+                    if (optimized) {
+                        tokensOut = optimize1(tokensOut);
+                    }
+                    return tokensOut;
+                };
+                out$.optimize2 = optimize2 = function(tokens) {
+                    var idx, ct, pt, ref$, results$ = [];
+                    idx = 1;
+                    while (idx < tokens.length) {
+                        ct = tokens[idx];
+                        pt = tokens[idx - 1];
+                        if (ct && pt) {
+                            if ((ct.type == "else" || ct.type == "end") && ct.j && !(pt.j || pt.jt || pt.jf)) {
+                                pt.j = (ref$ = ct.j, delete ct.j, ref$);
+                            }
+                        }
+                        results$.push(idx++);
+                    }
+                    return results$;
+                };
+                function import$(obj, src) {
+                    var own = {}.hasOwnProperty;
+                    for (var key in src) if (own.call(src, key)) obj[key] = src[key];
+                    return obj;
+                }
+            }).call(this);
+        }, {} ],
+        11: [ function(_dereq_, module, exports) {
+            (function() {
+                var Tokenizer, ixops, arithop, ixopt, escapeRegexp, ops, modes, opsRegexpBit, k, modesRegexpBit, ident, makeTokenizer, processJumps, CompiledCode, Compiler;
                 Tokenizer = _dereq_("./tokenizer");
                 ixops = _dereq_("./ixops");
                 arithop = _dereq_("./ixarith").arithop;
+                ixopt = _dereq_("./ixopt");
                 escapeRegexp = function(it) {
                     return it.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
                 };
@@ -1353,6 +1443,12 @@
                             value: this.braceStack.pop()
                         };
                     });
+                    x0$.rule(/\(x?([0-9]+)\)/, function(it) {
+                        return {
+                            type: "rep",
+                            value: 0 | it[1]
+                        };
+                    });
                     x0$.rule(/([a-z][a-z0-9]*):\((.+?)\)/i, ident);
                     x0$.rule(/([a-z][a-z0-9]*)(?::(\S+))?/i, ident);
                     x0$.rule(new RegExp(modesRegexpBit + "(.?)" + opsRegexpBit), function(it) {
@@ -1484,6 +1580,9 @@
                             if (t.j) {
                                 r += "j=" + t.j + " ";
                             }
+                            if (t.rep) {
+                                r += "rep=" + t.rep + " ";
+                            }
                             out.push(r);
                             if (t.type == "start") {
                                 st++;
@@ -1496,45 +1595,6 @@
                     };
                     return CompiledCode;
                 }();
-                optimize = function(tokensIn) {
-                    var tokensOut, optimized, idx, ct, nt, pt, ref$, val, ref1$;
-                    tokensOut = [];
-                    optimized = false;
-                    idx = 0;
-                    while (idx < tokensIn.length) {
-                        ct = tokensIn[idx];
-                        nt = tokensIn[idx + 1];
-                        pt = tokensIn[idx - 1];
-                        if (ct && nt && ct.type == "number" && nt.type == "arith" && !nt["const"]) {
-                            tokensOut.push((ref$ = import$({}, nt), ref$["const"] = ct.value, ref$));
-                            idx += 2;
-                            optimized = true;
-                            continue;
-                        }
-                        if (ct && nt && ct.type == "number" && nt.type == "arith" && nt["const"]) {
-                            val = arithop(nt.op, ct.value, nt["const"], nt.mode, nt.invert);
-                            tokensOut.push({
-                                type: "number",
-                                value: val
-                            });
-                            idx += 2;
-                            optimized = true;
-                            continue;
-                        }
-                        if (ct && pt) {
-                            if ((ct.type == "else" || ct.type == "end") && ct.j && !(pt.j || pt.jt || pt.jf)) {
-                                pt.j = (ref1$ = ct.j, delete ct.j, ref1$);
-                                optimized = true;
-                            }
-                        }
-                        tokensOut.push(ct);
-                        idx++;
-                    }
-                    if (optimized) {
-                        tokensOut = optimize(tokensOut);
-                    }
-                    return tokensOut;
-                };
                 Compiler = function() {
                     Compiler.displayName = "Compiler";
                     var prototype = Compiler.prototype, constructor = Compiler;
@@ -1552,8 +1612,9 @@
                             }
                             return true;
                         });
+                        tokens = ixopt.optimize1(tokens);
                         processJumps(tokens);
-                        tokens = optimize(tokens);
+                        ixopt.optimize2(tokens);
                         return new CompiledCode(tokens, rest, options);
                     };
                     return Compiler;
@@ -1564,18 +1625,14 @@
                     for (var r = ""; n > 0; (n >>= 1) && (str += str)) if (n & 1) r += str;
                     return r;
                 }
-                function import$(obj, src) {
-                    var own = {}.hasOwnProperty;
-                    for (var key in src) if (own.call(src, key)) obj[key] = src[key];
-                    return obj;
-                }
             }).call(this);
         }, {
             "./ixarith": 2,
             "./ixops": 8,
-            "./tokenizer": 12
+            "./ixopt": 10,
+            "./tokenizer": 13
         } ],
-        11: [ function(_dereq_, module, exports) {
+        12: [ function(_dereq_, module, exports) {
             (function() {
                 var wrap, out$ = typeof exports != "undefined" && exports || this;
                 out$.wrap = wrap = function(val, max) {
@@ -1586,7 +1643,7 @@
                 };
             }).call(this);
         }, {} ],
-        12: [ function(_dereq_, module, exports) {
+        13: [ function(_dereq_, module, exports) {
             (function() {
                 var Tokenizer;
                 Tokenizer = function() {
