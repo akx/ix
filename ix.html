@@ -36,7 +36,7 @@
 
 		textarea, input, button { background: none }
 		select { background: #000 }
-		.cn * {width:30%;}
+		.cn * {width:20%;}
 
 		#log {
 			color: #c0c0c0;
@@ -48,6 +48,7 @@
 <div id="ui">
 	<div class="cn">
 		<input id="image-input" type="file" placeholder="choose image">
+		<button id="run" type="button">Run code</button>
 		<button id="save-result" type="button">Save result</button>
 		<select id="load-example"><option>-examples-</option></select>
 	</div>
@@ -72,7 +73,7 @@
 			fileInput: document.getElementById("image-input"),
 			saveButton: document.getElementById("save-result"),
 			variableInputs: document.querySelectorAll("input.variable")
-		});
+		});	
 	};
 	sEl.onerror = function() {
 		alert("Oops, unable to load ix's library (ix.dev.js or ix.rel.js). Are you sure you've compiled it right?");
@@ -91,6 +92,9 @@
 			editor.focus();
 		}, false);
 	}
+	document.getElementById("run").addEventListener("click", function() {
+		window.ix.process();
+	}, false);
 }());
 </script>
 </body>
