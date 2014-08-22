@@ -24,7 +24,8 @@ modes = {
 	"8T": "trunc8",
 	"8W": "wrap8",
 	"16T": "trunc16"
-	"16W": "wrap16"
+	"16W": "wrap16",
+	"F": "floor"
 }
 
 

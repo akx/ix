@@ -15,6 +15,7 @@ export arithop = (op, val1, val2, mode, invert) ->
 		case 'rol' => retval = val1 <<< val2
 		case 'ror' => retval = val1 >>> val2
 		default => ...
+	retval = 0 | retval if mode == "floor"
 	# retval %= 256 if mode == "wrap8"
 	# retval &= 256 if mode == "trunc8"
 	# retval %= 65536 if mode == "wrap16"

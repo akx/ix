@@ -137,6 +137,12 @@ operator|meaning
 `<<`|shift left
 `>>`|shift right
 
+Arithmetic operations may optionally be prefixed by a 'mode' parameter, of which only one is currently defined:
+
+mode|meaning
+----|-------
+F   | floor (truncate result to integer)
+
 ### Comparisons
 
 operator|meaning
