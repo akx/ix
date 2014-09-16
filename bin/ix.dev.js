@@ -300,6 +300,9 @@
                       default:
                         throw Error("unimplemented");
                     }
+                    if (mode == "floor") {
+                        retval = 0 | retval;
+                    }
                     return retval;
                 };
                 function import$(obj, src) {
@@ -1255,7 +1258,8 @@
                     "8T": "trunc8",
                     "8W": "wrap8",
                     "16T": "trunc16",
-                    "16W": "wrap16"
+                    "16W": "wrap16",
+                    F: "floor"
                 };
                 opsRegexpBit = "(" + function() {
                     var results$ = [];
